@@ -1,0 +1,38 @@
+name: Announcer
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"   # every 5 min (GitHub may add a few min of delay)
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (print instead of posting to Discord)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: announcer
+  cancel-in-progress: false
+
+jobs:
+  announce:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run announcer
+        env:
+          DISCORD_YOUTUBE_WEBHOOK: ${{ secrets.DISCORD_YOUTUBE_WEBHOOK }}
+          DISCORD_LIVESTREAMS_WEBHOOK: ${{ secrets.DISCORD_LIVESTREAMS_WEBHOOK }}
+          DRY_RUN: ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) && '1' || '' }}
+        run: python3 announcer.py
+
+      - name: Save state
+        run: |
+          git config user.name "announcer-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add state.json
+          git diff --staged --quiet || (git commit -m "update announcer state" && git push)
